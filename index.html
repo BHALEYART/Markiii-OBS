@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Markiii Live · OBS Studio</title>
+<meta name="description" content="Live avatar tool for Markiii — lip sync, blink, glasses + green screen overlays for OBS."/>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦍</text></svg>"/>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<!-- ═════════════ LOADER ═════════════ -->
+<div class="loader" id="loader">
+  <div class="loader-mark">🦍</div>
+  <div class="loader-text">Loading Markiii</div>
+  <div class="loader-bar"><div class="loader-fill" id="loaderFill"></div></div>
+  <div class="loader-text" id="loaderStat" style="font-size:0.65rem;letter-spacing:0.1em;">0 / 0</div>
+</div>
+
+<!-- ═════════════ HEADER ═════════════ -->
+<header class="header">
+  <div class="brand">
+    <div class="brand-mark">🦍</div>
+    <div class="brand-text">
+      <strong>Markiii Live</strong>
+      <small>OBS Avatar Studio</small>
+    </div>
+  </div>
+  <a class="h-handle" href="https://x.com/MarkiiiWeb3" target="_blank" rel="noopener">@MarkiiiWeb3</a>
+  <div class="h-spacer"></div>
+  <div class="h-status">
+    <div class="dot" id="micDot"></div>
+    <span id="micStatusText">Mic offline</span>
+  </div>
+  <button class="btn-obs-enter" onclick="enterObsMode()">▶ Enter OBS Mode</button>
+</header>
+
+<!-- ═════════════ MAIN LAYOUT ═════════════ -->
+<main class="main">
+
+  <!-- Stage -->
+  <div class="stage">
+    <div class="stage-canvas">
+      <div class="canvas-frame" id="canvasFrame">
+        <canvas id="previewCanvas" width="1000" height="1000"></canvas>
+      </div>
+    </div>
+    <div class="stage-foot">
+      <div class="foot-block">
+        <button class="btn-mic" id="micBtn" onclick="toggleMic()">🎤 Start Mic</button>
+      </div>
+      <div class="foot-block">
+        <span class="foot-label">Level</span>
+        <div id="micMeter"><div id="micFill"></div></div>
+      </div>
+      <div class="foot-block">
+        <span class="foot-label">Mouth</span>
+        <span class="foot-val" id="footMouth">Mmm</span>
+      </div>
+      <div class="foot-block">
+        <span class="foot-label">Blink</span>
+        <span class="foot-val" id="footBlink">—</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <aside class="panel">
+
+    <!-- Lip Sync -->
+    <div class="group">
+      <div class="group-hd">Lip Sync</div>
+      <div class="row">
+        <label>Auto Lip Sync</label>
+        <div class="switch on" id="lipSyncSwitch" onclick="toggleSwitch('lipSync')">
+          <input type="checkbox" id="lipSyncToggle" checked/>
+        </div>
+      </div>
+      <div class="row">
+        <label>Style</label>
+        <select id="syncStyle">
+          <option value="ehh">Default (Ehh)</option>
+          <option value="uhh">Casual (Uhh)</option>
+          <option value="smile">Smiley (Smile)</option>
+          <option value="sss">Hissy (Sss)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Auto Blink -->
+    <div class="group">
+      <div class="group-hd">Auto Blink</div>
+      <div class="row">
+        <label>Auto Blink</label>
+        <div class="switch" id="blinkSwitch" onclick="toggleSwitch('blink')">
+          <input type="checkbox" id="blinkToggle"/>
+        </div>
+      </div>
+      <div class="row">
+        <label>Interval</label>
+        <input type="range" id="blinkSlider" min="1" max="12" step="0.5" value="4" oninput="onBlinkSlider()"/>
+        <span class="val" id="blinkVal">4s</span>
+      </div>
+      <div class="indicator">Blink fires every interval seconds while mic is live.</div>
+    </div>
+
+    <!-- Accessories -->
+    <div class="group">
+      <div class="group-hd">Accessories</div>
+      <div class="row">
+        <label>Glasses</label>
+        <div class="switch" id="glassesSwitch" onclick="toggleSwitch('glasses')">
+          <input type="checkbox" id="glassesToggle"/>
+        </div>
+      </div>
+      <div class="help">Adds <strong style="color:var(--lemon)">Markiii-Glasses.png</strong> on top of the character.</div>
+    </div>
+
+    <!-- Background -->
+    <div class="group">
+      <div class="group-hd">Background</div>
+      <div class="row">
+        <label>Green Screen</label>
+        <div class="switch" id="greenSwitch" onclick="toggleSwitch('green')">
+          <input type="checkbox" id="greenToggle"/>
+        </div>
+      </div>
+      <div class="help">Draws <strong style="color:var(--lemon)">Markiii-Green.png</strong> as the very top layer so OBS Chroma Key can cut out the background.</div>
+    </div>
+
+    <!-- OBS Setup -->
+    <div class="group">
+      <div class="group-hd">OBS Setup</div>
+      <div class="help">
+        <strong style="color:var(--ink);">Window Capture (easy):</strong><br/>
+        1. Click <kbd>▶ Enter OBS Mode</kbd> above<br/>
+        2. In OBS: <kbd>+ Source</kbd> → <kbd>Window Capture</kbd> → pick this browser<br/>
+        3. Add Chroma Key filter if Green Screen is on<br/>
+      </div>
+      <div class="help" style="margin-top:0.5rem;">
+        <strong style="color:var(--ink);">Browser Source (advanced):</strong>
+        <div class="obs-url-row">
+          <input id="obsUrl" readonly value=""/>
+          <button onclick="copyObsUrl()">Copy</button>
+        </div>
+      </div>
+    </div>
+
+  </aside>
+</main>
+
+<!-- ═════════════ OBS MODE OVERLAY ═════════════ -->
+<div class="obs-mode" id="obsMode">
+  <div class="obs-canvas-wrap">
+    <canvas id="obsCanvas" width="1000" height="1000"></canvas>
+  </div>
+</div>
+<div class="obs-exit" id="obsExit" style="display:none;">
+  <button onclick="exitObsMode()">× Exit OBS Mode</button>
+  <button class="pause" id="pauseBtn" onclick="togglePause()">⏸ Pause Mic</button>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+//  Markiii Live — single-file OBS avatar studio
+//  Simpler than SolQuicks: no auto-expressions. Just lip sync + periodic blink.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── ASSETS ────────────────────────────────────────────────────────────────
+const ASSET_BASE = './assets/';
+
+const BASE    = 'Markiii-Base.png';
+const BLINK   = 'Markiii-Blink.png';
+const GLASSES = 'Markiii-Glasses.png';
+const GREEN   = 'Markiii-Green.png';
+
+// Mouth shapes — volume tier → mouth file, per style
+const MOUTHS = {
+  ehh:   { silent:'Markiii-Mmm.png',   quiet:'Markiii-Eee.png', mid:'Markiii-Ehh.png',   loud:'Markiii-Ahh.png' },
+  uhh:   { silent:'Markiii-Mmm.png',   quiet:'Markiii-Eee.png', mid:'Markiii-Uhh.png',   loud:'Markiii-Ahh.png' },
+  smile: { silent:'Markiii-Smile.png', quiet:'Markiii-Eee.png', mid:'Markiii-Smile.png', loud:'Markiii-Ahh.png' },
+  sss:   { silent:'Markiii-Mmm.png',   quiet:'Markiii-Sss.png', mid:'Markiii-Rrr.png',   loud:'Markiii-Ahh.png' },
+};
+
+// ── STATE ─────────────────────────────────────────────────────────────────
+const state = {
+  lipSync: true,
+  syncStyle: 'ehh',
+  autoBlink: false,
+  blinkIntervalSec: 4,
+  glasses: false,
+  greenScreen: false,
+  micPaused: false,
+};
+
+let blinkUntil = 0;            // performance.now() deadline for blink frame
+let lastAutoBlinkTime = 0;
+let currentMouth = 'silent';
+const BLINK_MS = 140;
+
+// ── IMAGE CACHE ───────────────────────────────────────────────────────────
+const IMG = {};
+function imgUrl(file) { return ASSET_BASE + encodeURIComponent(file); }
+
+function preload(onProgress) {
+  const files = new Set();
+  files.add(BASE); files.add(BLINK); files.add(GLASSES); files.add(GREEN);
+  Object.values(MOUTHS).forEach(m => Object.values(m).forEach(f => files.add(f)));
+  const list = [...files];
+  let done = 0;
+  return Promise.all(list.map(file => new Promise(res => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = img.onerror = () => {
+      IMG[file] = (img.complete && img.naturalWidth) ? img : null;
+      done++;
+      onProgress(done, list.length, file);
+      res();
+    };
+    img.src = imgUrl(file);
+  })));
+}
+
+// ── CANVAS RENDER ─────────────────────────────────────────────────────────
+const previewCanvas = document.getElementById('previewCanvas');
+const previewCtx = previewCanvas.getContext('2d');
+const obsCanvas = document.getElementById('obsCanvas');
+const obsCtx = obsCanvas.getContext('2d');
+
+function getMouthFile() {
+  const set = MOUTHS[state.syncStyle] || MOUTHS.ehh;
+  return set[currentMouth] || set.silent;
+}
+
+function isBlinking() {
+  return performance.now() < blinkUntil;
+}
+
+function drawFrame(ctx, w, h) {
+  ctx.clearRect(0, 0, w, h);
+
+  // 1. Base (always)
+  const baseImg = IMG[BASE];
+  if (baseImg) ctx.drawImage(baseImg, 0, 0, w, h);
+
+  // 2. Mouth (always — silence frame = closed mouth)
+  const mouthImg = IMG[getMouthFile()];
+  if (mouthImg) ctx.drawImage(mouthImg, 0, 0, w, h);
+
+  // 3. Blink overlay (conditional)
+  if (isBlinking()) {
+    const blinkImg = IMG[BLINK];
+    if (blinkImg) ctx.drawImage(blinkImg, 0, 0, w, h);
+  }
+
+  // 4. Glasses overlay (conditional)
+  if (state.glasses) {
+    const gImg = IMG[GLASSES];
+    if (gImg) ctx.drawImage(gImg, 0, 0, w, h);
+  }
+
+  // 5. Green screen overlay — very top layer (conditional)
+  if (state.greenScreen) {
+    const grImg = IMG[GREEN];
+    if (grImg) ctx.drawImage(grImg, 0, 0, w, h);
+  }
+}
+
+function render() {
+  drawFrame(previewCtx, previewCanvas.width, previewCanvas.height);
+  if (document.body.classList.contains('obs-active')) {
+    drawFrame(obsCtx, obsCanvas.width, obsCanvas.height);
+  }
+}
+
+// ── LIP SYNC ──────────────────────────────────────────────────────────────
+function getMouthTier(vol) {
+  if (vol > 0.12)  return 'loud';
+  if (vol > 0.05)  return 'mid';
+  if (vol > 0.018) return 'quiet';
+  return 'silent';
+}
+
+// ── MIC ───────────────────────────────────────────────────────────────────
+let analyser = null;
+let audioCtx = null;
+let micStream = null;
+
+async function toggleMic() {
+  if (micStream) { stopMic(); return; }
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0;
+    audioCtx.createMediaStreamSource(micStream).connect(analyser);
+    document.getElementById('micBtn').textContent = '⏹ Stop Mic';
+    document.getElementById('micBtn').classList.add('live');
+    document.getElementById('micDot').classList.add('live');
+    document.getElementById('micStatusText').textContent = 'Listening';
+  } catch (e) {
+    document.getElementById('micStatusText').textContent = 'Mic denied';
+  }
+}
+
+function stopMic() {
+  if (micStream) micStream.getTracks().forEach(t => t.stop());
+  if (audioCtx) audioCtx.close();
+  micStream = null; audioCtx = null; analyser = null;
+  document.getElementById('micBtn').textContent = '🎤 Start Mic';
+  document.getElementById('micBtn').classList.remove('live');
+  document.getElementById('micDot').classList.remove('live');
+  document.getElementById('micStatusText').textContent = 'Mic offline';
+  document.getElementById('micFill').style.width = '0%';
+  currentMouth = 'silent';
+}
+
+function togglePause() {
+  state.micPaused = !state.micPaused;
+  document.getElementById('pauseBtn').textContent = state.micPaused ? '▶ Resume' : '⏸ Pause Mic';
+  document.getElementById('pauseBtn').classList.toggle('paused', state.micPaused);
+}
+
+// ── MAIN LOOP ─────────────────────────────────────────────────────────────
+function loop() {
+  if (analyser && !state.micPaused) {
+    const d = new Float32Array(analyser.fftSize);
+    analyser.getFloatTimeDomainData(d);
+    let sq = 0; for (let i = 0; i < d.length; i++) sq += d[i]*d[i];
+    const rawRms = Math.sqrt(sq / d.length);
+
+    if (state.lipSync) currentMouth = getMouthTier(rawRms);
+    else currentMouth = 'silent';
+
+    document.getElementById('micFill').style.width = Math.min(100, rawRms * 800) + '%';
+    document.getElementById('footMouth').textContent =
+      (state.lipSync ? currentMouth.charAt(0).toUpperCase() + currentMouth.slice(1) : 'Off');
+  }
+
+  // Auto-blink timer
+  if (state.autoBlink && analyser) {
+    const now = performance.now();
+    if (now - lastAutoBlinkTime > state.blinkIntervalSec * 1000) {
+      blinkUntil = Math.max(blinkUntil, now + BLINK_MS);
+      lastAutoBlinkTime = now;
+    }
+  }
+
+  document.getElementById('footBlink').textContent = isBlinking() ? '●' : '—';
+
+  render();
+  requestAnimationFrame(loop);
+}
+
+// ── UI HANDLERS ───────────────────────────────────────────────────────────
+function toggleSwitch(key) {
+  if (key === 'lipSync') {
+    state.lipSync = !state.lipSync;
+    document.getElementById('lipSyncSwitch').classList.toggle('on', state.lipSync);
+    document.getElementById('lipSyncToggle').checked = state.lipSync;
+  } else if (key === 'blink') {
+    state.autoBlink = !state.autoBlink;
+    document.getElementById('blinkSwitch').classList.toggle('on', state.autoBlink);
+    document.getElementById('blinkToggle').checked = state.autoBlink;
+  } else if (key === 'glasses') {
+    state.glasses = !state.glasses;
+    document.getElementById('glassesSwitch').classList.toggle('on', state.glasses);
+    document.getElementById('glassesToggle').checked = state.glasses;
+  } else if (key === 'green') {
+    state.greenScreen = !state.greenScreen;
+    document.getElementById('greenSwitch').classList.toggle('on', state.greenScreen);
+    document.getElementById('greenToggle').checked = state.greenScreen;
+  }
+  broadcastState();
+}
+
+function onBlinkSlider() {
+  state.blinkIntervalSec = parseFloat(document.getElementById('blinkSlider').value);
+  document.getElementById('blinkVal').textContent = state.blinkIntervalSec + 's';
+  broadcastState();
+}
+
+document.getElementById('syncStyle').addEventListener('change', e => {
+  state.syncStyle = e.target.value;
+  broadcastState();
+});
+
+// ── OBS MODE ──────────────────────────────────────────────────────────────
+function enterObsMode() {
+  document.body.classList.add('obs-active');
+  document.getElementById('obsExit').style.display = 'flex';
+  if (!micStream) toggleMic();
+}
+function exitObsMode() {
+  document.body.classList.remove('obs-active');
+  document.getElementById('obsExit').style.display = 'none';
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.body.classList.contains('obs-active')) exitObsMode();
+});
+
+// ── OBS BROWSER SOURCE URL ────────────────────────────────────────────────
+const OBS_URL = window.location.href.replace(/index\.html?(\?.*)?$/i, '').replace(/\/$/, '') + '/obs.html';
+document.getElementById('obsUrl').value = OBS_URL;
+function copyObsUrl() {
+  navigator.clipboard.writeText(OBS_URL).then(() => {
+    const btn = event.target;
+    const old = btn.textContent;
+    btn.textContent = '✓';
+    setTimeout(() => btn.textContent = old, 1500);
+  });
+}
+
+// ── BROADCAST CHANNEL ─────────────────────────────────────────────────────
+const ch = new BroadcastChannel('markiii-live');
+function broadcastState() { ch.postMessage({ type: 'state', state: { ...state } }); }
+setInterval(broadcastState, 2000);
+window.addEventListener('focus', broadcastState);
+
+// ── BOOT ──────────────────────────────────────────────────────────────────
+preload((done, total) => {
+  document.getElementById('loaderFill').style.width = (done / total * 100) + '%';
+  document.getElementById('loaderStat').textContent = `${done} / ${total}`;
+}).then(() => {
+  setTimeout(() => document.getElementById('loader').classList.add('gone'), 200);
+  loop();
+});
+</script>
+</body>
+</html>
