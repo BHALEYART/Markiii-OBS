@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Markiii Live — OBS</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; overflow:hidden; background:transparent; }
+  canvas {
+    display:block;
+    position:absolute;
+    top:50%; left:50%;
+    transform:translate(-50%, -50%);
+    width: min(100vw, 100vh);
+    height: min(100vw, 100vh);
+  }
+</style>
+</head>
+<body>
+<canvas id="c" width="1000" height="1000"></canvas>
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+//  Markiii Live — OBS Browser Source
+//  Add this URL in OBS → Sources → + → Browser Source
+//  Set Width/Height (e.g. 1000×1000) and check "Shutdown when not visible"
+//  Apply a Chroma Key filter (green) if Green Screen is enabled
+// ═══════════════════════════════════════════════════════════════════════════
+
+const ASSET_BASE = './assets/';
+
+const BASE    = 'Markiii-Base.png';
+const BLINK   = 'Markiii-Blink.png';
+const GLASSES = 'Markiii-Glasses.png';
+const GREEN   = 'Markiii-Green.png';
+
+const MOUTHS = {
+  ehh:   { silent:'Markiii-Mmm.png',   quiet:'Markiii-Eee.png', mid:'Markiii-Ehh.png',   loud:'Markiii-Ahh.png' },
+  uhh:   { silent:'Markiii-Mmm.png',   quiet:'Markiii-Eee.png', mid:'Markiii-Uhh.png',   loud:'Markiii-Ahh.png' },
+  smile: { silent:'Markiii-Smile.png', quiet:'Markiii-Eee.png', mid:'Markiii-Smile.png', loud:'Markiii-Ahh.png' },
+  sss:   { silent:'Markiii-Mmm.png',   quiet:'Markiii-Sss.png', mid:'Markiii-Rrr.png',   loud:'Markiii-Ahh.png' },
+};
+
+const liveState = {
+  lipSync: true,
+  syncStyle: 'ehh',
+  autoBlink: false,
+  blinkIntervalSec: 4,
+  glasses: false,
+  greenScreen: false,
+};
+
+let blinkUntil = 0;
+let lastAutoBlinkTime = 0;
+let currentMouth = 'silent';
+const BLINK_MS = 140;
+
+const IMG = {};
+function imgUrl(file) { return ASSET_BASE + encodeURIComponent(file); }
+
+// ── BroadcastChannel ──────────────────────────────────────────────────────
+const ch = new BroadcastChannel('markiii-live');
+ch.onmessage = ({ data }) => {
+  if (data.type === 'state' && data.state) Object.assign(liveState, data.state);
+};
+
+// ── Lip sync ──────────────────────────────────────────────────────────────
+function getMouthTier(vol) {
+  if (vol > 0.12)  return 'loud';
+  if (vol > 0.05)  return 'mid';
+  if (vol > 0.018) return 'quiet';
+  return 'silent';
+}
+function getMouthFile() {
+  const set = MOUTHS[liveState.syncStyle] || MOUTHS.ehh;
+  return set[currentMouth] || set.silent;
+}
+function isBlinking() { return performance.now() < blinkUntil; }
+
+// ── Canvas render ─────────────────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+function render() {
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  const baseImg = IMG[BASE];
+  if (baseImg) ctx.drawImage(baseImg, 0, 0, w, h);
+
+  const mouthImg = IMG[getMouthFile()];
+  if (mouthImg) ctx.drawImage(mouthImg, 0, 0, w, h);
+
+  if (isBlinking()) {
+    const blinkImg = IMG[BLINK];
+    if (blinkImg) ctx.drawImage(blinkImg, 0, 0, w, h);
+  }
+
+  if (liveState.glasses) {
+    const gImg = IMG[GLASSES];
+    if (gImg) ctx.drawImage(gImg, 0, 0, w, h);
+  }
+
+  if (liveState.greenScreen) {
+    const grImg = IMG[GREEN];
+    if (grImg) ctx.drawImage(grImg, 0, 0, w, h);
+  }
+}
+
+// ── Mic + loop ────────────────────────────────────────────────────────────
+let analyser = null;
+
+async function startMic() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    const actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') await actx.resume();
+    analyser = actx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0;
+    actx.createMediaStreamSource(stream).connect(analyser);
+  } catch (e) {
+    console.warn('[Markiii OBS] Mic unavailable —', e.message);
+  }
+}
+
+function loop() {
+  if (analyser) {
+    const d = new Float32Array(analyser.fftSize);
+    analyser.getFloatTimeDomainData(d);
+    let sq = 0; for (let i = 0; i < d.length; i++) sq += d[i]*d[i];
+    const rawRms = Math.sqrt(sq / d.length);
+    if (liveState.lipSync) currentMouth = getMouthTier(rawRms);
+    else currentMouth = 'silent';
+  }
+
+  if (liveState.autoBlink && analyser) {
+    const now = performance.now();
+    if (now - lastAutoBlinkTime > liveState.blinkIntervalSec * 1000) {
+      blinkUntil = Math.max(blinkUntil, now + BLINK_MS);
+      lastAutoBlinkTime = now;
+    }
+  }
+
+  render();
+  requestAnimationFrame(loop);
+}
+
+// ── Preload + boot ────────────────────────────────────────────────────────
+async function preload() {
+  const files = new Set();
+  files.add(BASE); files.add(BLINK); files.add(GLASSES); files.add(GREEN);
+  Object.values(MOUTHS).forEach(m => Object.values(m).forEach(f => files.add(f)));
+  await Promise.all([...files].map(file => new Promise(res => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = img.onerror = () => { IMG[file] = (img.complete && img.naturalWidth) ? img : null; res(); };
+    img.src = imgUrl(file);
+  })));
+}
+
+preload().then(() => { startMic(); loop(); });
+</script>
+</body>
+</html>
