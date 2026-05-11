@@ -65,7 +65,7 @@ Markiii-OBS/
 
 | Feature | What it does |
 |---|---|
-| **Lip Sync** | Four-tier mic volume → mouth file. Four styles: Default (Ehh), Casual (Uhh), Smiley (Smile), Hissy (Sss/Rrr). |
+| **Lip Sync** | Four-tier mic volume → mouth file. Two styles: Default (Ehh — neutral closed mouth on silence) and Smiley (smiles on silence). |
 | **Auto Blink** | Toggle + interval slider (1–12s). Blinks fire every interval while the mic is live. Off by default. |
 | **Glasses** | Overlays `Markiii-Glasses.png` on top of the character. |
 | **Green Screen** | Draws `Markiii-Green.png` as the very top layer for OBS Chroma Key. |
@@ -87,14 +87,14 @@ Green Screen sits at the very top so the Chroma Key cuts the background cleanly 
 
 ## Lip sync mouth mapping
 
-| Volume tier | Default (Ehh) | Casual (Uhh) | Smiley | Hissy (Sss) |
-|---|---|---|---|---|
-| Silent (< 0.018) | Mmm | Mmm | Smile | Mmm |
-| Quiet (< 0.05)   | Eee | Eee | Eee   | Sss |
-| Mid (< 0.12)     | Ehh | Uhh | Smile | Rrr |
-| Loud (≥ 0.12)    | Ahh | Ahh | Ahh   | Ahh |
+| Volume tier | Default (Ehh) | Smiley |
+|---|---|---|
+| Silent (< 0.018) | Mmm   | **Smile** |
+| Quiet (< 0.05)   | Eee   | Eee |
+| Mid (< 0.12)     | Ehh   | Ehh |
+| Loud (≥ 0.12)    | Ahh   | Ahh |
 
-Thresholds are tuned for typical speaking volume. If your mic runs hot/quiet, tweak `getMouthTier` in `index.html` and `obs.html` (keep them in sync).
+The only difference between the two styles is the resting/silent mouth — Smiley keeps the character smiling between words.
 
 ---
 
